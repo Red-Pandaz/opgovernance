@@ -1,8 +1,11 @@
 // utils/helpers.js
 
 // Function to search for a match from either of the arrays
-function searchMatch(array1, array2, array3) {
+function searchMatch(object1, array2, array3) {
     const resultArray = [];
+    
+    // Extract array1's properties
+    const array1 = Object.values(object1);
     
     // Loop through array1
     for (let obj1 of array1) {

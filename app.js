@@ -24,7 +24,7 @@ async function main(){
     let currentTimestamp = Date.now();
     let [lastBlock, lastTimestamp] = await getLastTimestamp()
     // let fromBlock = lastBlock + 1;
-    let fromBlock = currentBlock.number - 600000
+    let fromBlock = currentBlock.number - 1000000
     let toBlock = currentBlock.number;
     let cronTime = 180000;
     let voteMinimum = 500000
@@ -64,9 +64,9 @@ async function main(){
      
         await getExpiredProposals(castsToSend, openProposals, closedProposals, fromBlock, toBlock)
         await getCanceledProposals(castsToSend, openProposals, closedProposals, fromBlock, toBlock)
-        await getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum)
+        
     }
-   
+    await getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum)
 
     sentCasts = await sendCasts(castsToSend)
     if(newProposals || closedProposals){
@@ -88,3 +88,24 @@ async function main(){
 
 
 main() 
+
+// // Define a function to be executed by setTimeout
+// function runLoopFrom(blockNumber) {
+//     // Ensure blockNumber is within the desired range
+//     while (blockNumber <= currentBlock) {
+//         // Execute main function with the current block number
+//         main(blockNumber);
+        
+//         // Increment blockNumber for the next iteration
+//         blockNumber += 50000;
+        
+//         // Schedule the next iteration after a delay
+//         setTimeout(() => {
+//             // Call runLoopFrom recursively with the updated blockNumber
+//             runLoopFrom(blockNumber);
+//         }, 300000); // Delay of 300 seconds (5 minutes)
+//     }
+// }
+
+// // Start the loop from the specified block number
+// runLoopFrom(99582724);
