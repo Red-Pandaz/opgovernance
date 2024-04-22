@@ -4,14 +4,13 @@ const { retryApiCall, accessSecret } = require('../utils/apiutils.js');
 
 
 async function sendCasts(castArray) {
-    console.log(castArray)
-    console.log("done sending casts")
+    castArray.sort((a, b) => a.blockHeight - b.blockHeight);
     // const SIGNER_UUID = await retryApiCall(() => accessSecret('SIGNER_UUID'))
     // const NEYNAR_API_KEY = await retryApiCall(() => accessSecret('NEYNAR_API_KEY'))
-    // let sentArray = [];
+    let sentArray = [];
     // // Organize by block height and remove duplicates
-    // castArray.sort((a, b) => a.blockHeight - b.blockHeight);
-    // for (let castObject of castArray) {
+ 
+    for (let castObject of castArray) {
     //     if (sentArray.indexOf(castObject.transactionHash) !== -1) {
     //         continue;
     //     }
@@ -25,13 +24,14 @@ async function sendCasts(castArray) {
                    
     //             });
     //             console.log(data)
-    //             sentArray.push(castObject);
+                console.log(castObject)
+                sentArray.push(castObject);
     //         } catch (err) {
     //             console.error("Error in API call:", err);
     //             // Handle the error as needed
     //         }
     //     }, 5000); // Delay each API call by 5 seconds
-    // }   
-    // return sentArray;
+    }   
+    return sentArray;
 }
 module.exports = { sendCasts };

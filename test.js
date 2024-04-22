@@ -14,45 +14,50 @@ const abstainVote = 2
 // console.log(proposals)
 const proposalId = ethers.BigNumber.from('20327152654308054166942093105443920402082671769027198649343468266910325783863')
 
-async function getCanceledProposals(closedArray, openProposals, newProposals, fromBlock, toBlock, voteMinimum){
+async function getCanceledProposals(castArray, closedArray, openProposals, newProposals, fromBlock, toBlock){
+    // console.log(openProposals)
+    // console.log(newProposals)
 
     try{
-
-        console.log("FROM BLOCK: " + fromBlock)
-        console.log("TO BLOCK: " + toBlock)
         const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
         const filter = opGovernorProxyContract.filters.ProposalCanceled()
         const cancelEvents = await opGovernorProxyContract.queryFilter(filter, fromBlock, toBlock)
-        let proposalIds = []
-        let canceledProposals = []
-        let canceledNewProposals = []
-        for(let i = 0; i < cancelEvents.length; i++){
-            let id = cancelEvents[i].args.proposalId
-            id = (ethers.BigNumber.from(id).toString())
-            cancelIds.push(id)
-        
+        for(let cancelEvent of cancelEvents){
+            
+            let castObj = {}
+            let id = cancelEvent.args.proposalId
+            let proposalId = (ethers.BigNumber.from(id).toString())
+            castObj.blockHeight = cancelEvent.blockNumber
+            castObj.transactionHash = cancelEvent.transactionHash
+            let cancelObj = {}
+            cancelObj.proposalId = proposalId
+            // let cancelationArray = searchMatch(cancelObj, openProposals, newProposals)
+            // console.log(cancelationArray)
+            const firstSix = proposalId.substring(0, 6);
+            const lastFour = proposalId.substring(proposalId.length - 4);
+            const formattedId = firstSix + "..." + lastFour;
+            let header
+            const newIndex = newProposals.findIndex(item => item.proposalId === proposalId);
+            if (newIndex !== -1) {
+                header = newProposals[newIndex].header
+                closedArray.push(newProposals[newIndex])
+                newProposals.splice(newIndex, 1);
+               
+            } 
+            const openIndex = openProposals.findIndex(item => item.proposalId === proposalId)
+            if (openIndex !== -1) {
+                header = openProposals[openIndex].header
+                closedArray.push(openProposals[openIndex])
+                openProposals.splice(openIndex, 1);
+            } 
+            castObj.cast = `Proposal Canceled- ${header}(ProposalId ${formattedId}): https://optimistic.etherscan.io/tx/${castObj.transactionHash})`
+            castArray.push(castObj)
         }
-        for(let i = 0; i < cancelEvents.length; i++){
-            let canceleddObject = {}
-            array.find(item => item.proposalId === proposalIdToFind)
-        }
-        uncanceledIds = proposalIds.filter(id => !cancelIds.includes(id))
-        // console.log(uncanceledIds.length)
-        // console.log(uncanceledIds)
-        const keyStart = 'startBlock'; 
-        const keyEnd = 'endBlock';
-
-        const arrayOfBlockMins = proposals.map(obj => obj[keyStart]);
-        const arrayOfBlockMaxs = proposals.map(obj => obj[keyEnd]);
-        const firstBlock = Math.min(...arrayOfBlockMins)
-        const lastBlock = Math.max(...arrayOfBlockMaxs)
-        console.log(firstBlock)
-        console.log(lastBlock)
+  
+    return
     }catch(err){
-        console.log("canceled proposal error: " + err)
-    } 
-console.log("finishing get canceled proposals")
-return
+        console.log(err)
+    }
 }
 
 async function getExpiredProposals(castArray, openProposals, closedProposals, currentBlock){
@@ -63,10 +68,8 @@ async function getExpiredProposals(castArray, openProposals, closedProposals, cu
 
     // const currentProposals = await 
     for(let proposal of openProposals){
-        console.log(proposal.endBlock)
         if(proposal.endBlock <= currentBlock.number){
             const resultsObj = {}
-            console.log("Proposal " + proposal.header + " expired: " + proposal.endBlock +"   " + proposal.proposalId) 
             const results = await opGovernorProxyContract.proposalVotes(proposal.proposalId)
             resultsObj.forVotes = (parseInt((ethers.BigNumber.from(results.forVotes).toString()))) * Math.pow(10, -18)
             resultsObj.againstVotes = (parseInt((ethers.BigNumber.from(results.againstVotes).toString()))) * Math.pow(10, -18)
@@ -97,7 +100,6 @@ async function getExpiredProposals(castArray, openProposals, closedProposals, cu
            closedProposals.push(proposal)
         }
     }
-    console.log("ending get expired proposal")
     return
 // return [expiredProposals, ongoingProposals]
 
@@ -120,26 +122,21 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
             var voteValue = (ethers.BigNumber.from(voteEvent.args.weight).toString());
             voteValue = voteValue * Math.pow(10, -18);
             voteValue = Math.round(voteValue)
-            if(voteValue >= 20000){
+            if(voteValue >= voteMinimum){
                 let voteObj = {}
-                console.log("Checking for Errors getting Id from event")
-                voteObj.proposalId =(BigInt(voteEvent.data[0], 16)).toString()
-                // console.log(voteObj.proposalId)
+                voteObj.proposalId = (BigInt(voteEvent.args.proposalId._hex, 16)).toString()
                 voteObj.transactionHash = voteEvent.transactionHash
                 voteObj.blockHeight = voteEvent.blockNumber
-                voteObj.voter = voteEvent.voter
+                voteObj.voter = voteEvent.args.voter
                 voteObj.voteWeight = voteValue
                 voteObj.support = voteEvent.args.support
-
                 let voteArray = searchMatch(voteObj, openProposals, newProposals)
                 let castObj = {}
                 castObj.blockHeight = voteObj.blockHeight
                 castObj.transactionHash = voteObj.transactionHash
                 let formattedVoteValue = voteValue.toString().replace(/\B(?<!\.\d*)(?=(\d{3})+(?!\d))/g, ",")
-                console.log("checking for errors converting id")
-                const propNumberStr = voteObj.proposalId.toString();
-                const propFirstSix = propNumberStr.substring(0, 6);
-                const propLastFour = propNumberStr.substring(propNumberStr.length - 4);
+                const propFirstSix = voteObj.proposalId.substring(0, 6);
+                const propLastFour = voteObj.proposalId.substring(voteObj.proposalId.length - 4);
                 const formattedPropId = propFirstSix + "..." + propLastFour;
 
                 const addressStr = voteObj.voter
@@ -156,11 +153,15 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
                 }else{
                     voteString = 'voted to abstain from'
                 }
-                castObj.cast = `${formattedAddress} ${voteString} proposal ${voteArray[1].header} (proposalId ${formattedPropId}) with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
-                // console.log(castObj)
+                if(voteArray[1]){
+                    castObj.cast = `${formattedAddress} ${voteString} proposal ${voteArray[1].header} (proposalId ${formattedPropId}) with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
+                    // console.log(castObj)
+                } else{
+                    castObj.cast = `${formattedAddress} ${voteString} proposal ${formattedPropId} with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
+                }
+                castsToSend.push(castObj)
 
-            
-          
+        
 
         }
     }
@@ -198,5 +199,5 @@ async function getVoteResults(proposalId){
 
 
 
-module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes }
+module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes, getVoteResults }
 

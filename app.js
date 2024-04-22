@@ -1,7 +1,6 @@
-//Need a bot that does the following
-// make event listeners return actual cast objects
+// Get header in vote casts
+// make sure datbase retrievals and updates are working
 // Cast out final results of proposal after expiration block
-// Cast out votes with large vote weight
 // Scan for other updates (expiration, quorum, proposaltype)
 
 
@@ -15,7 +14,7 @@ const { sendCasts } = require('./farcaster/farcaster.js');
 const { getExpiredProposals, getCanceledProposals, getNewVotes } = require('./test.js')
 const { findNewProposals } = require('./proposallistener.js')
 
-async function main(){
+async function main(startBlock){
     try{
     const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
     const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`);
@@ -24,12 +23,13 @@ async function main(){
     let currentTimestamp = Date.now();
     let [lastBlock, lastTimestamp] = await getLastTimestamp()
     // let fromBlock = lastBlock + 1;
-    let fromBlock = currentBlock.number - 1000000
-    let toBlock = currentBlock.number;
+    // let fromBlock = currentBlock.number - 1000000
+    // let toBlock = currentBlock.number;
+    let fromBlock = startBlock
+    let toBlock = startBlock + 49999
     let cronTime = 180000;
     let voteMinimum = 500000
     let castsToSend = [];
-    let newProposalArray =[]
     let openProposals =[]
     let closedProposals = []
     let sentCasts 
@@ -56,19 +56,13 @@ async function main(){
     openProposals = await getOpenProposals()
     // openPrososals = JSON.parse(require ('./proposals.json')).toString()
     // console.log(openProposals)
-    // newProposals = []
-    newProposals = await findNewProposals(newProposalArray, castsToSend, fromBlock, toBlock)
-    console.log(newProposals)
+    let newProposals = await findNewProposals(castsToSend, fromBlock, toBlock)
     if(openProposals || newProposals){
-        console.log("checking in")
-     
         await getExpiredProposals(castsToSend, openProposals, closedProposals, fromBlock, toBlock)
-        await getCanceledProposals(castsToSend, openProposals, closedProposals, fromBlock, toBlock)
+        await getCanceledProposals(castsToSend, closedProposals, openProposals, newProposals, fromBlock, toBlock)
         
     }
     await getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum)
-
-    sentCasts = await sendCasts(castsToSend)
     if(newProposals || closedProposals){
         await updateProposalDatabases(newProposals, closedProposals)
     }
@@ -87,25 +81,29 @@ async function main(){
 
 
 
-main() 
+// main() 
 
-// // Define a function to be executed by setTimeout
-// function runLoopFrom(blockNumber) {
-//     // Ensure blockNumber is within the desired range
-//     while (blockNumber <= currentBlock) {
-//         // Execute main function with the current block number
-//         main(blockNumber);
+// Define a function to be executed by setTimeout
+async function runLoopFrom(blockNumber) {
+    const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+    const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`);
+    let currentBlock = await retryApiCall(() => provider.getBlockWithTransactions('latest'))
+    // Ensure blockNumber is within the desired range
+    if (blockNumber <= currentBlock.number) {
+        console.log("executing main from block :" + blockNumber)
+        // Execute main function with the current block number
+        main(blockNumber);
         
-//         // Increment blockNumber for the next iteration
-//         blockNumber += 50000;
+        // Increment blockNumber for the next iteration
+        blockNumber += 50000;
         
-//         // Schedule the next iteration after a delay
-//         setTimeout(() => {
-//             // Call runLoopFrom recursively with the updated blockNumber
-//             runLoopFrom(blockNumber);
-//         }, 300000); // Delay of 300 seconds (5 minutes)
-//     }
-// }
+        // Schedule the next iteration after a delay
+        setTimeout(async () => {
+            // Call runLoopFrom recursively with the updated blockNumber
+            await runLoopFrom(blockNumber);
+        }, 120000); // Delay of 300 seconds (5 minutes)
+    }
+}
 
-// // Start the loop from the specified block number
-// runLoopFrom(99582724);
+// Start the loop from the specified block number
+runLoopFrom(99582724);

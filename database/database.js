@@ -74,23 +74,23 @@ async function updateProposalDatabases(newArray, closedArray) {
             });
             await retryApiCall(() => {
                 if (closedArray && closedArray.length > 0) {
-                    return Promise.all(closedArray.map(async (element) => {
-                        await db.collection(closedName).insertOne(element);
-                    }));
+                    // return Promise.all(closedArray.map(async (element) => {
+                    //     await db.collection(closedName).insertOne(element);
+                    // }));
                 }
             });
             const proposalIdsToRemove = closedArray.map(element => element.proposalId);
-            await retryApiCall(() => {
-                if (closedArray && closedArray.length > 0) {
-                    return Promise.all(closedArray.map(async (element) => {
-                        await db.collection(closedName).insertOne(element);
-                    }))
-                    .then(async () => {
-                        await db.collection(openName).deleteMany({ proposalId: { $in: proposalIdsToRemove } });
-                    });
-                }
-            });
-            
+
+            if (proposalIdsToRemove.length === 0) {
+                console.log("No proposals to remove from collection:", openName);
+            } else {
+                await retryApiCall(async () => {
+                    const openCollection = db.collection(openName);
+                    const deleteResult = await openCollection.deleteMany({ proposalId: { $in: proposalIdsToRemove } });
+
+                    console.log("Deleted documents from collection:", openName, ":", deleteResult.deletedCount);
+                });
+            }
         console.log("done with updating proposal database")
         // Return updated array1
         return newArray;
@@ -133,7 +133,6 @@ async function getLastTimestampInternal() {
             return null;
         }
     } catch (error) {
-        console.log(DB_URI)
         console.error('Error fetching last timestamp:', error);
         throw error; // Rethrow the error to be caught by the caller
     }
@@ -191,7 +190,6 @@ async function getOpenProposals() {
         const collection = database.collection('Open Proposals');
 
         const documents = await collection.find({}).toArray();
-        console.log("finished openProposals")
         return documents;
     }catch(err){
         console.log(err)

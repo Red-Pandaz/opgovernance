@@ -15,7 +15,7 @@ const createdProposalMethod2 = ethers.utils.id('ProposalCreated(uint256,address,
 const createdProposalMethod3 = ethers.utils.id('ProposalCreated(uint256,address,address,bytes,uint256,uint256,string)')
 const createdProposalMethod4 = ethers.utils.id('ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)')
 
-async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
+async function findNewProposals(castsToSend, fromBlock, toBlock){
 
    try {
 
@@ -23,6 +23,7 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
     const filter = opGovernorProxyContract.filters['()'];
     let currentBlock = await provider.getBlockWithTransactions('latest');
+    let newProposals = []
 
     //Here we have 4 filters created
     const newProposalFilter1 = {
@@ -95,6 +96,7 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 1
+            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
                   
            }  else{
@@ -145,6 +147,7 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 2
+            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
                   
            }  else{
@@ -193,6 +196,7 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 3
+            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
                   
            }  else{
@@ -243,6 +247,7 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 4
+            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
         
                   
@@ -261,6 +266,7 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
             castsToSend.push(newCastObj)
             // console.log(newCastObj.cast)
         })
+        console.log(newProposals)
         return newProposals
         // let idArray = []
         // proposalArray.forEach(function(proposal){
@@ -283,7 +289,6 @@ async function findNewProposals(newProposals, castsToSend, fromBlock, toBlock){
         // });
     }catch(err){ 
         }
-    console.log("ending findnewproposals")
     return
     } 
 
