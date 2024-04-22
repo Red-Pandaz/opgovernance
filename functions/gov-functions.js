@@ -269,10 +269,6 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
     return
     } 
 
-module.exports = { findNewProposals } 
-
-
-const proposalId = ethers.BigNumber.from('20327152654308054166942093105443920402082671769027198649343468266910325783863')
 async function getCanceledProposals(castArray, closedArray, openProposals, newProposals, fromBlock, toBlock){
     try{
         const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
@@ -360,9 +356,9 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
         //     opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock),
         //     opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
         // ]);
-        const voteEvents = await opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock)
-        const voteParamEvents = await opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
-        console.log(voteParamEvents)
+        const voteWithoutParamEvents = await opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock)
+        const voteWithParamEvents = await opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
+        let voteEvents = voteWithoutParamEvents.concat(voteWithParamEvents)
         for(let voteEvent of voteEvents){
             var voteValue = (ethers.BigNumber.from(voteEvent.args.weight).toString());
             voteValue = voteValue * Math.pow(10, -18);
