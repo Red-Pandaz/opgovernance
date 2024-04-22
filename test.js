@@ -6,18 +6,273 @@ const opTokenAddress = '0x4200000000000000000000000000000000000042'
 const opGovernorProxyAddress = '0xcdf27f107725988f2261ce2256bdfcde8b382b10'
 const opGovernorReadyAsProxyABI = JSON.parse(require('./abi/opGovernorReadAsProxy.json').result)
 const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${process.env.INFURA_API}`)
-const proposals = JSON.parse(require ('./proposals.json'))
-const againstVote = 0
-const forVote = 1
-const abstainVote = 2
+const proposals = JSON.parse(require ('./data/proposals.json'))
 
-// console.log(proposals)
+
+async function findNewProposals(castsToSend, fromBlock, toBlock){
+    const createdProposalMethod1 = ethers.utils.id('ProposalCreated(uint256,address,address,bytes,uint256,uint256,string,uint8)')
+    const createdProposalMethod2 = ethers.utils.id('ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string,uint8)')
+    const createdProposalMethod3 = ethers.utils.id('ProposalCreated(uint256,address,address,bytes,uint256,uint256,string)')
+    const createdProposalMethod4 = ethers.utils.id('ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)')
+   
+    try {
+    //Declaring function variables/constants
+    const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
+    const filter = opGovernorProxyContract.filters['()'];
+    let currentBlock = await provider.getBlockWithTransactions('latest');
+    let newProposals = []
+
+    //Here we have 4 filters created
+    const newProposalFilter1 = {
+        address: opGovernorProxyAddress,
+        topics: [createdProposalMethod1],
+        fromBlock: fromBlock,
+        toBlock: toBlock
+    };
+    const newProposalFilter2 = {
+        address: opGovernorProxyAddress,
+        topics: [createdProposalMethod2],
+        fromBlock: fromBlock,
+        toBlock: toBlock
+    };
+
+    const newProposalFilter3 = {
+        address: opGovernorProxyAddress,
+        topics: [createdProposalMethod3],
+        fromBlock: fromBlock,
+        toBlock: toBlock
+    };
+
+    const newProposalFilter4 = {
+        address: opGovernorProxyAddress,
+        topics: [createdProposalMethod4],
+        fromBlock: fromBlock,
+        toBlock: toBlock
+    };
+    const iface = new ethers.utils.Interface(opGovernorReadyAsProxyABI)
+    //Searching for new proposals
+    const createdProposal1Events = await opGovernorProxyContract.queryFilter(newProposalFilter1, fromBlock, toBlock)
+    //Getting data from new proposals
+    for (const event of createdProposal1Events){
+        let decodedEvent = iface.decodeEventLog(createdProposalMethod1, event.data, event.topics)
+        let header = decodedEvent[6]
+        let proposalType = decodedEvent[7]
+        let createBlock = await event.getTransactionReceipt()
+        createBlock = createBlock.blockNumber
+        let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[4]).toString()))
+        let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[5]).toString()))
+        let proposalId = (ethers.BigNumber.from(decodedEvent.proposalId).toString())
+        let proposer = decodedEvent.proposer
+        let newProposalObject = {}
+            //Formatting headers. This works on all proposals that have already been created
+            //Unsure how to automatically parse titles when there seems to be no standardization
+           if(header){
+            header = header.slice(0, header.indexOf("\n"))
+            if (header.includes('\\n')){
+                header = header.slice(0, header.indexOf("\\n"))
+            }
+            if (header.includes(' - ')){
+                header = header.slice(0, header.indexOf(" - "))
+            }
+            if (header.includes(' -- ')){
+                header = header.slice(0, header.indexOf(" -- "))
+            }
+            if (header.includes('https')){
+                header = header.slice(0, header.indexOf('https') - 2)
+            }
+            if (header.startsWith('# ')){
+               header = header.substring(2);
+             }
+            //Creating new Proposal object
+            newProposalObject.header = header;
+            newProposalObject.proposer = proposer
+            newProposalObject.transactionHash = event.transactionHash;
+            newProposalObject.proposalId = proposalId;
+            newProposalObject.createBlock = createBlock
+            newProposalObject.startBlock = startBlock
+            newProposalObject.endBlock = endBlock
+            newProposalObject.proposalType = proposalType
+            newProposalObject.filter = 1
+            console.log("pushing " + newProposalObject)
+            newProposals.push(newProposalObject)
+                  
+           }  else{
+            console.log(null)
+           }
+        }
+
+        //This entire process is repeated for all filters
+        const createdProposal2Events = await opGovernorProxyContract.queryFilter(newProposalFilter2, fromBlock, toBlock)
+        for (const event of createdProposal2Events){
+        
+            let decodedEvent = iface.decodeEventLog(createdProposalMethod2, event.data, event.topics)
+            let header = decodedEvent[8]
+            let proposalType = decodedEvent[9]
+            let createBlock = await event.getTransactionReceipt()
+            createBlock = createBlock.blockNumber
+            let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[6]).toString()))
+            let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[7]).toString()))
+            let proposalId = (ethers.BigNumber.from(decodedEvent.proposalId).toString())
+            let proposer = decodedEvent.proposer
+            let newProposalObject = {}
+            //Formatting headers. This works on all proposals that have already been created
+            //Unsure how to automatically parse titles when there seems to be no standardization
+           if(header){
+            header = header.slice(0, header.indexOf("\n"))
+            if (header.includes('\\n')){
+                header = header.slice(0, header.indexOf("\\n"))
+            }
+            if (header.includes(' - ')){
+                header = header.slice(0, header.indexOf(" - "))
+            }
+            if (header.includes(' -- ')){
+                header = header.slice(0, header.indexOf(" -- "))
+            }
+            if (header.includes('https')){
+                header = header.slice(0, header.indexOf('https') - 2)
+            }
+            if (header.startsWith('# ')){
+               header = header.substring(2);
+             }
+            //Creating new Proposal object
+            newProposalObject.header = header;
+            newProposalObject.proposer = proposer;
+            newProposalObject.transactionHash = event.transactionHash;
+            newProposalObject.proposalId = proposalId;
+            newProposalObject.createBlock = createBlock
+            newProposalObject.startBlock = startBlock
+            newProposalObject.endBlock = endBlock
+            newProposalObject.proposalType = proposalType
+            newProposalObject.filter = 2
+            console.log("pushing " + newProposalObject)
+            newProposals.push(newProposalObject)
+                  
+           }  else{
+            console.log(null)
+           }
+        }
+        //This entire process is repeated for all filters
+        const createdProposal3Events = await opGovernorProxyContract.queryFilter(newProposalFilter3, fromBlock, toBlock)
+        for (const event of createdProposal3Events){
+            let decodedEvent = iface.decodeEventLog(createdProposalMethod3, event.data, event.topics)
+            let header = decodedEvent[6]
+            let proposalType = null
+            let createBlock = await event.getTransactionReceipt()
+            createBlock = createBlock.blockNumber
+            let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[4]).toString()))
+            let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[5]).toString()))
+            let proposalId = (ethers.BigNumber.from(decodedEvent.proposalId).toString())
+            let proposer = decodedEvent.proposer
+            let newProposalObject = {}
+            //Formatting headers. This works on all proposals that have already been created
+            //Unsure how to automatically parse titles when there seems to be no standardization
+           if(header){
+            header = header.slice(0, header.indexOf("\n"))
+            if (header.includes('\\n')){
+                header = header.slice(0, header.indexOf("\\n"))
+            }
+            if (header.includes(' - ')){
+                header = header.slice(0, header.indexOf(" - "))
+            }
+            if (header.includes(' -- ')){
+                header = header.slice(0, header.indexOf(" -- "))
+            }
+            if (header.includes('https')){
+                header = header.slice(0, header.indexOf('https') - 2)
+            }
+            if (header.startsWith('# ')){
+               header = header.substring(2);
+             }
+            //Creating new Proposal object            
+            newProposalObject.header = header;
+            newProposalObject.proposer = proposer
+            newProposalObject.transactionHash = event.transactionHash;
+            newProposalObject.proposalId = proposalId;
+            newProposalObject.createBlock = createBlock
+            newProposalObject.startBlock = startBlock
+            newProposalObject.endBlock = endBlock
+            newProposalObject.proposalType = proposalType
+            newProposalObject.filter = 3
+            console.log("pushing " + newProposalObject)
+            newProposals.push(newProposalObject)
+                  
+           }  else{
+            console.log(null)
+           }
+        }
+         //This entire process is repeated for all filters
+        const createdProposal4Events = await opGovernorProxyContract.queryFilter(newProposalFilter4, fromBlock, toBlock)
+        for (const event of createdProposal4Events){
+          let decodedEvent = iface.decodeEventLog(createdProposalMethod4, event.data, event.topics)
+            let header = decodedEvent[8]
+            let proposalType = null
+            let createBlock = await event.getTransactionReceipt()
+            createBlock = createBlock.blockNumber
+            let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[6]).toString()))
+            let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[7]).toString()))
+            // let Quorum = parseInt(())
+            let proposalId = (ethers.BigNumber.from(decodedEvent.proposalId).toString())
+            let proposer = decodedEvent.proposer
+            let newProposalObject = {}
+
+            //Formatting headers. This works on all proposals that have already been created
+            //Unsure how to automatically parse titles when there seems to be no standardization
+           if(header){
+            header = header.slice(0, header.indexOf("\n"))
+            if (header.includes('\\n')){
+                header = header.slice(0, header.indexOf("\\n"))
+            }
+            if (header.includes(' - ')){
+                header = header.slice(0, header.indexOf(" - "))
+            }
+            if (header.includes(' -- ')){
+                header = header.slice(0, header.indexOf(" -- "))
+            }
+            if (header.includes('https')){
+                header = header.slice(0, header.indexOf('https') - 2)
+            }
+            if (header.startsWith('# ')){
+               header = header.substring(2);
+             }
+             //Creating new Proposal object
+            newProposalObject.header = header;
+            newProposalObject.proposer = proposer;
+            newProposalObject.transactionHash = event.transactionHash;
+            newProposalObject.proposalId = proposalId
+            newProposalObject.createBlock = createBlock
+            newProposalObject.startBlock = startBlock
+            newProposalObject.endBlock = endBlock
+            newProposalObject.proposalType = proposalType
+            newProposalObject.filter = 4
+            console.log("pushing " + newProposalObject)
+            newProposals.push(newProposalObject)
+        
+                  
+           } 
+        }
+        // console.log("FOUND PROPOSALS: " + newProposals)
+        newProposals.forEach(function(newProposal){
+            let newCastObj = {}
+            newCastObj.blockHeight = newProposal.createBlock
+            newCastObj.transactionHash = newProposal.transactionHash
+            const numberStr = newProposal.proposalId
+            const firstSix = numberStr.substring(0, 6);
+            const lastFour = numberStr.substring(numberStr.length - 4);
+            const formattedId = firstSix + "..." + lastFour;
+            newCastObj.cast = `New proposal created- ${newProposal.header} (proposalId ${formattedId})\nhttps://optimistic.etherscan.io/tx/${newProposal.transactionHash})`
+            castsToSend.push(newCastObj)
+            // console.log(newCastObj.cast)
+        })
+        return newProposals
+    }catch(err){ 
+        }
+    return
+    } 
+
+
+
 const proposalId = ethers.BigNumber.from('20327152654308054166942093105443920402082671769027198649343468266910325783863')
-
 async function getCanceledProposals(castArray, closedArray, openProposals, newProposals, fromBlock, toBlock){
-    // console.log(openProposals)
-    // console.log(newProposals)
-
     try{
         const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
         const filter = opGovernorProxyContract.filters.ProposalCanceled()
@@ -42,7 +297,6 @@ async function getCanceledProposals(castArray, closedArray, openProposals, newPr
                 header = newProposals[newIndex].header
                 closedArray.push(newProposals[newIndex])
                 newProposals.splice(newIndex, 1);
-               
             } 
             const openIndex = openProposals.findIndex(item => item.proposalId === proposalId)
             if (openIndex !== -1) {
@@ -53,7 +307,6 @@ async function getCanceledProposals(castArray, closedArray, openProposals, newPr
             castObj.cast = `Proposal Canceled- ${header}(ProposalId ${formattedId}): https://optimistic.etherscan.io/tx/${castObj.transactionHash})`
             castArray.push(castObj)
         }
-  
     return
     }catch(err){
         console.log(err)
@@ -61,14 +314,9 @@ async function getCanceledProposals(castArray, closedArray, openProposals, newPr
 }
 
 async function getExpiredProposals(castArray, openProposals, closedProposals, currentBlock){
-   
-    // const currentProposals = JSON.parse(require ('./proposals.json'))
-  
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
-
-    // const currentProposals = await 
     for(let proposal of openProposals){
-        if(proposal.endBlock <= currentBlock.number){
+        if(proposal.endBlock <= currentBlock){
             const resultsObj = {}
             const results = await opGovernorProxyContract.proposalVotes(proposal.proposalId)
             resultsObj.forVotes = (parseInt((ethers.BigNumber.from(results.forVotes).toString()))) * Math.pow(10, -18)
@@ -95,16 +343,12 @@ async function getExpiredProposals(castArray, openProposals, closedProposals, cu
            castObject.blockHeight = proposal.endBlock
            castObject.cast = (`Voting ended for Proposal ${proposal.header} (ID ${formattedId})\n For: ${resultsObj.forVotes} OP\n Against: ${resultsObj.againstVotes} OP\n Abstain: ${resultsObj.abstainVotes} OP` )
            castArray.push(castObject)
-        //    console.log(castObj)
            proposal.results = resultsObj
            closedProposals.push(proposal)
         }
     }
     return
-// return [expiredProposals, ongoingProposals]
-
 }
-
 
 async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum){
     try{
@@ -116,9 +360,9 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
         //     opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
         // ]);
         const voteEvents = await opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock)
-        // console.log(voteEvents[0])
+        const voteParamEvents = await opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
+        console.log(voteParamEvents)
         for(let voteEvent of voteEvents){
-          
             var voteValue = (ethers.BigNumber.from(voteEvent.args.weight).toString());
             voteValue = voteValue * Math.pow(10, -18);
             voteValue = Math.round(voteValue)
@@ -138,13 +382,10 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
                 const propFirstSix = voteObj.proposalId.substring(0, 6);
                 const propLastFour = voteObj.proposalId.substring(voteObj.proposalId.length - 4);
                 const formattedPropId = propFirstSix + "..." + propLastFour;
-
                 const addressStr = voteObj.voter
                 const addressFirstEight = addressStr.substring(0, 8);
                 const addressLastFour = addressStr.substring(addressStr.length - 4);
                 const formattedAddress = addressFirstEight + "..." + addressLastFour;
-
-
                 let voteString = ''
                 if(voteObj.support === 0){
                     voteString = 'voted against'
@@ -153,18 +394,15 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
                 }else{
                     voteString = 'voted to abstain from'
                 }
-                if(voteArray[1]){
-                    castObj.cast = `${formattedAddress} ${voteString} proposal ${voteArray[1].header} (proposalId ${formattedPropId}) with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
+                if(voteArray){
+                    castObj.cast = `${formattedAddress} ${voteString} proposal ${voteArray[0].matchedObj.header} (proposalId ${formattedPropId}) with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
                     // console.log(castObj)
                 } else{
                     castObj.cast = `${formattedAddress} ${voteString} proposal ${formattedPropId} with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
                 }
                 castsToSend.push(castObj)
-
-        
-
+            }
         }
-    }
     } catch(err){
         console.log("Get New Votes Error: " + err)
     }
@@ -173,12 +411,22 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
 
 }
 
+// async function getProposalUpdates(){
+//     let currentBlock = await provider.getBlockWithTransactions('latest')
+//     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
+//     const filter = opGovernorProxyContract.filters.ProposalCanceled()
+//     const deadlineUpdateEvents = await opGovernorProxyContract.queryFilter(filter, currentBlock.number - 10000000, currentBlock.number)
+//     console.log(deadlineUpdateEvents)
+
+// }
+
+
+
 async function getVoteResults(proposalId){
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
     let voteResult = await opGovernorProxyContract.proposalVotes(proposalId)
     voteResult.forEach(function(result){
         result = ethers.BigNumber.from(result).toString()
-        // console.log(voteResult)
     })
     let againstVotes = ethers.BigNumber.from(voteResult.againstVotes).toString()
     let forVotes = ethers.BigNumber.from(voteResult.forVotes).toString()
@@ -189,15 +437,10 @@ async function getVoteResults(proposalId){
     voteResults.forVotes = forVotes
     voteResults.againstVotes = againstVotes
     voteResults.abstainVotes = abstainVotes
-   
 }
 
-// getProposalCancelations()
-// getNewVotes()
-// getExpiredProposals()
 
 
 
-
-module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes, getVoteResults }
+module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes, getVoteResults, findNewProposals }
 

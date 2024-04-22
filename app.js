@@ -1,9 +1,6 @@
-// Get header in vote casts
-// make sure datbase retrievals and updates are working
-// Cast out final results of proposal after expiration block
 // Scan for other updates (expiration, quorum, proposaltype)
-
-
+// Look into incorporating ENS names
+// Look into additional neynar account and supercast account
 
 
 const ethers = require('ethers');
@@ -11,8 +8,8 @@ const dotenv = require("dotenv").config();
 const { updateTimestamp, getLastTimestamp, getOpenProposals, updateProposalDatabases } = require('./database/database.js');
 const { retryApiCall, accessSecret } = require('./utils/apiutils.js');
 const { sendCasts } = require('./farcaster/farcaster.js');
-const { getExpiredProposals, getCanceledProposals, getNewVotes } = require('./test.js')
-const { findNewProposals } = require('./proposallistener.js')
+const { getExpiredProposals, getCanceledProposals, getNewVotes, findNewProposals } = require('./functions/gov-functions.js')
+
 
 async function main(startBlock){
     try{
@@ -54,18 +51,22 @@ async function main(startBlock){
     //     return;
     //     }
     openProposals = await getOpenProposals()
+
+
     // openPrososals = JSON.parse(require ('./proposals.json')).toString()
     // console.log(openProposals)
     let newProposals = await findNewProposals(castsToSend, fromBlock, toBlock)
     if(openProposals || newProposals){
-        await getExpiredProposals(castsToSend, openProposals, closedProposals, fromBlock, toBlock)
+        await getExpiredProposals(castsToSend, openProposals, closedProposals, toBlock)
         await getCanceledProposals(castsToSend, closedProposals, openProposals, newProposals, fromBlock, toBlock)
         
     }
     await getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum)
-    if(newProposals || closedProposals){
-        await updateProposalDatabases(newProposals, closedProposals)
+    if ((newProposals && newProposals.length > 0) || (closedProposals && closedProposals.length > 0)) {
+        await updateProposalDatabases(newProposals, closedProposals);
     }
+
+  
     if(castsToSend){
         sentCastArray = await sendCasts(castsToSend);
     }
@@ -95,15 +96,15 @@ async function runLoopFrom(blockNumber) {
         main(blockNumber);
         
         // Increment blockNumber for the next iteration
-        blockNumber += 50000;
+        blockNumber += 100000;
         
         // Schedule the next iteration after a delay
         setTimeout(async () => {
             // Call runLoopFrom recursively with the updated blockNumber
             await runLoopFrom(blockNumber);
-        }, 120000); // Delay of 300 seconds (5 minutes)
+        }, 60000); // Delay of 300 seconds (5 minutes)
     }
 }
 
 // Start the loop from the specified block number
-runLoopFrom(99582724);
+runLoopFrom(119032724);

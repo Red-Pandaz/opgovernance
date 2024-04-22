@@ -74,9 +74,9 @@ async function updateProposalDatabases(newArray, closedArray) {
             });
             await retryApiCall(() => {
                 if (closedArray && closedArray.length > 0) {
-                    // return Promise.all(closedArray.map(async (element) => {
-                    //     await db.collection(closedName).insertOne(element);
-                    // }));
+                    return Promise.all(closedArray.map(async (element) => {
+                        await db.collection(closedName).insertOne(element);
+                    }));
                 }
             });
             const proposalIdsToRemove = closedArray.map(element => element.proposalId);
@@ -100,6 +100,19 @@ async function updateProposalDatabases(newArray, closedArray) {
         throw error;
     }
 }
+
+// async function updateProposal(proposalId, property){
+//     try{
+//         const DB_URI = await retryApiCall(() => accessSecret('DB_URI'));
+//         if (!client || !client.topology || !client.topology.isConnected()) {
+//             client = new MongoClient(DB_URI);
+//             await retryApiCall(() => client.connect());
+        
+//         }
+//     }catch(err){
+//         console.log(err)
+//     }
+// }
 
 async function getLastTimestamp() {
     try {
