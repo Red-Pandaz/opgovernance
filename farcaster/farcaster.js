@@ -2,17 +2,14 @@ const dotenv = require("dotenv").config();
 const crypto = require('crypto'); // Import the crypto module
 const sdk = require('api')('@neynar/v2.0#79zo2aluds8jrx');
 const { retryApiCall, accessSecret } = require('../utils/apiutils.js');
- // const SIGNER_UUID = await retryApiCall(() => accessSecret('SIGNER_UUID'))
-    // const NEYNAR_API_KEY = await retryApiCall(() => accessSecret('NEYNAR_API_KEY'))
 
-
+// Sending out casts ordered by blockheight with any possible duplicates removed. 
 async function sendCasts(castArray) {
     try {
         // Sort castArray by blockHeight
         castArray.sort((a, b) => a.blockHeight - b.blockHeight);
-    
-        const NEYNAR_API_KEY = process.env.OP_GOVERNANCE_NEYNAR_API_KEY;
-        const SIGNER_UUID = process.env.OP_GOVERNANCE_SIGNER_UUID;
+        const NEYNAR_API_KEY = await retryApiCall(() => accessSecret('OP_GOVERNANCE_NEYNAR_API_KEY'))
+        const SIGNER_UUID = await retryApiCall(() => accessSecret('OP_GOVERNANCE_SIGNER_UUID'))
     
          // Maintain a map to track sent cast hashes for each transaction hash
            const sentHashesMap = new Map();
@@ -58,7 +55,7 @@ async function sendCasts(castArray) {
                 }
     
                 // Add a delay of 5 seconds between each iteration
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                await new Promise(resolve => setTimeout(resolve, 5000));
             }
     
             return sentArray;

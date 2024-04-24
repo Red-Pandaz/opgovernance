@@ -55,6 +55,7 @@ async function pushOpSnapshot(snapshot) {
 }
 }
 
+//Adds new proposals to open collection, removed closed proposals from open collection and adds them to closed collection
 async function updateProposalDatabases(newArray, closedArray) {
         try {
             
@@ -101,19 +102,7 @@ async function updateProposalDatabases(newArray, closedArray) {
     }
 }
 
-// async function updateProposal(proposalId, property){
-//     try{
-//         const DB_URI = await retryApiCall(() => accessSecret('DB_URI'));
-//         if (!client || !client.topology || !client.topology.isConnected()) {
-//             client = new MongoClient(DB_URI);
-//             await retryApiCall(() => client.connect());
-        
-//         }
-//     }catch(err){
-//         console.log(err)
-//     }
-// }
-
+// Getting the most recent timestamp for accurately keeping track of block scans
 async function getLastTimestamp() {
     try {
         return await retryApiCall(() => getLastTimestampInternal())
@@ -176,22 +165,17 @@ async function pruneDatabaseAndEmailInternal() {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     await retryApiCall(() => db.collection(collectionName).deleteMany({ timestamp: { $lt: oneWeekAgo } }));
-
     const prunedData = await retryApiCall(() => db.collection(collectionName).find({ timestamp: { $lt: oneWeekAgo } }).toArray());
     await retryApiCall(() => sendEmail(prunedData));
-
     console.log('Pruning complete');
     }catch(err){
     console.log(err)
     }
-
     return
 }
 
 
 async function getOpenProposals() {
-  
-
     try {
         if (!client || !client.topology || !client.topology.isConnected()) {
             const DB_URI = await retryApiCall(() => accessSecret('DB_URI'));
@@ -202,7 +186,7 @@ async function getOpenProposals() {
         const database = client.db('OP-Governance'); 
         const collection = database.collection('Open Proposals');
 
-        const documents = await collection.find({}).toArray();
+        const documents = await retryApiCall(() => collection.find({}).toArray());
         return documents;
     }catch(err){
         console.log(err)
@@ -212,8 +196,7 @@ async function getOpenProposals() {
 
 }
 
-
-
+//Updating the end block of a proposal in the database so it will be declared over at the right time
 async function updateEndBlocks(arrayOfObjects) {
     try {
         if (!client || !client.topology || !client.topology.isConnected()) {
@@ -227,17 +210,17 @@ async function updateEndBlocks(arrayOfObjects) {
         const collection = database.collection('Open Proposals');
         for (const obj of arrayOfObjects) {
             // Find the corresponding document in the MongoDB collection
-            const documentToUpdate = await collection.findOne({ proposalId: obj.proposalId });
+            const documentToUpdate = await retryApiCall(() =>collection.findOne({ proposalId: obj.proposalId }));
 
             if (documentToUpdate) {
                 // Update the 'endBlock' property of the document
                 documentToUpdate.endBlock = obj.endBlock;
 
                 // Save the updated document back to the database
-                await collection.updateOne(
+                await retryApiCall(() => collection.updateOne(
                     { _id: documentToUpdate._id },
                     { $set: { endBlock: obj.endBlock } }
-                );
+                ));
 
                 console.log(`Updated document with proposalId ${obj.proposalId}`);
             } else {
@@ -248,7 +231,6 @@ async function updateEndBlocks(arrayOfObjects) {
         console.log(err)
     }
 }
-
 
 
 module.exports = { updateTimestamp, getLastTimestamp, pruneDatabaseAndEmail, getOpenProposals, updateProposalDatabases, updateEndBlocks }

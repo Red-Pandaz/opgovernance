@@ -7,12 +7,14 @@ const { searchMatch } = require('../utils/helpers.js')
 const opTokenAddress = '0x4200000000000000000000000000000000000042'
 const opGovernorProxyAddress = '0xcdf27f107725988f2261ce2256bdfcde8b382b10'
 const opGovernorReadyAsProxyABI = JSON.parse(require('../abi/opGovernorReadAsProxy.json').result)
-const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${process.env.INFURA_API}`)
-const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${process.env.INFURA_API}`)
+
 const proposals = JSON.parse(require ('../data/proposals.json'))
 
-
+//Scans for new proposals, if found sends out a cast and updates database
 async function findNewProposals(castsToSend, fromBlock, toBlock){
+    const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+    const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`)
+    const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${INFURA_API}`)
     const createdProposalMethod1 = ethers.utils.id('ProposalCreated(uint256,address,address,bytes,uint256,uint256,string,uint8)')
     const createdProposalMethod2 = ethers.utils.id('ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string,uint8)')
     const createdProposalMethod3 = ethers.utils.id('ProposalCreated(uint256,address,address,bytes,uint256,uint256,string)')
@@ -23,7 +25,7 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
     //Declaring function variables/constants
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
     const filter = opGovernorProxyContract.filters['()'];
-    let currentBlock = await provider.getBlockWithTransactions('latest');
+    let currentBlock =  await retryApiCall(() =>  provider.getBlockWithTransactions('latest'));
     let newProposals = []
 
     //Here we have 4 filters created
@@ -55,13 +57,13 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
     };
     const iface = new ethers.utils.Interface(opGovernorReadyAsProxyABI)
     //Searching for new proposals
-    const createdProposal1Events = await opGovernorProxyContract.queryFilter(newProposalFilter1, fromBlock, toBlock)
+    const createdProposal1Events = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(newProposalFilter1, fromBlock, toBlock))
     //Getting data from new proposals
     for (const event of createdProposal1Events){
         let decodedEvent = iface.decodeEventLog(createdProposalMethod1, event.data, event.topics)
         let header = decodedEvent[6]
         let proposalType = decodedEvent[7]
-        let createBlock = await event.getTransactionReceipt()
+        let createBlock = await retryApiCall(() =>  event.getTransactionReceipt())
         createBlock = createBlock.blockNumber
         let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[4]).toString()))
         let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[5]).toString()))
@@ -105,13 +107,13 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
         }
 
         //This entire process is repeated for all filters
-        const createdProposal2Events = await opGovernorProxyContract.queryFilter(newProposalFilter2, fromBlock, toBlock)
+        const createdProposal2Events = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(newProposalFilter2, fromBlock, toBlock))
         for (const event of createdProposal2Events){
         
             let decodedEvent = iface.decodeEventLog(createdProposalMethod2, event.data, event.topics)
             let header = decodedEvent[8]
             let proposalType = decodedEvent[9]
-            let createBlock = await event.getTransactionReceipt()
+            let createBlock = await retryApiCall(() => event.getTransactionReceipt())
             createBlock = createBlock.blockNumber
             let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[6]).toString()))
             let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[7]).toString()))
@@ -154,12 +156,12 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
            }
         }
         //This entire process is repeated for all filters
-        const createdProposal3Events = await opGovernorProxyContract.queryFilter(newProposalFilter3, fromBlock, toBlock)
+        const createdProposal3Events = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(newProposalFilter3, fromBlock, toBlock))
         for (const event of createdProposal3Events){
             let decodedEvent = iface.decodeEventLog(createdProposalMethod3, event.data, event.topics)
             let header = decodedEvent[6]
             let proposalType = null
-            let createBlock = await event.getTransactionReceipt()
+            let createBlock = await retryApiCall(() =>  event.getTransactionReceipt())
             createBlock = createBlock.blockNumber
             let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[4]).toString()))
             let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[5]).toString()))
@@ -202,12 +204,12 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
            }
         }
          //This entire process is repeated for all filters
-        const createdProposal4Events = await opGovernorProxyContract.queryFilter(newProposalFilter4, fromBlock, toBlock)
+        const createdProposal4Events = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(newProposalFilter4, fromBlock, toBlock))
         for (const event of createdProposal4Events){
           let decodedEvent = iface.decodeEventLog(createdProposalMethod4, event.data, event.topics)
             let header = decodedEvent[8]
             let proposalType = null
-            let createBlock = await event.getTransactionReceipt()
+            let createBlock = await retryApiCall(() => event.getTransactionReceipt())
             createBlock = createBlock.blockNumber
             let startBlock = parseInt((ethers.BigNumber.from(decodedEvent[6]).toString()))
             let endBlock  = parseInt((ethers.BigNumber.from(decodedEvent[7]).toString()))
@@ -267,11 +269,15 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
     return
     } 
 
+    //Looks for canceled proposals. If found, sends out a cast and sends proposal to closed collection
 async function getCanceledProposals(castArray, closedArray, openProposals, newProposals, fromBlock, toBlock){
     try{
+        const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+        const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`)
+        const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${INFURA_API}`)
         const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
         const filter = opGovernorProxyContract.filters.ProposalCanceled()
-        const cancelEvents = await opGovernorProxyContract.queryFilter(filter, fromBlock, toBlock)
+        const cancelEvents = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(filter, fromBlock, toBlock))
         for(let cancelEvent of cancelEvents){
             
             let castObj = {}
@@ -309,12 +315,16 @@ async function getCanceledProposals(castArray, closedArray, openProposals, newPr
     }
 }
 
+//Checks open proposals and compared endBlock vs. current block. IF expired casts out results and sends proposal to closed collection
 async function getExpiredProposals(castArray, openProposals, closedProposals, currentBlock){
+    const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+    const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`)
+    const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${INFURA_API}`)
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
     for(let proposal of openProposals){
         if(proposal.endBlock <= currentBlock){
             const resultsObj = {}
-            const results = await opGovernorProxyContract.proposalVotes(proposal.proposalId)
+            const results = await retryApiCall(() => opGovernorProxyContract.proposalVotes(proposal.proposalId))
             resultsObj.forVotes = (parseInt((ethers.BigNumber.from(results.forVotes).toString()))) * Math.pow(10, -18)
             resultsObj.againstVotes = (parseInt((ethers.BigNumber.from(results.againstVotes).toString()))) * Math.pow(10, -18)
             resultsObj.abstainVotes = (parseInt((ethers.BigNumber.from(results.abstainVotes).toString()))) * Math.pow(10, -18)
@@ -349,17 +359,17 @@ async function getExpiredProposals(castArray, openProposals, closedProposals, cu
     return
 }
 
+//gets votes and votes with params, sends out a cast if vote weight is >= 500,000 OP
 async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum){
     try{
+        const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+        const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`)
+        const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${INFURA_API}`)
         const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
         const voteFilter = opGovernorProxyContract.filters.VoteCast()
         const voteWithParamsFilter = opGovernorProxyContract.filters.VoteCastWithParams()
-        // const voteEvents = await Promise.all([
-        //     opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock),
-        //     opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
-        // ]);
-        const voteWithoutParamEvents = await opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock)
-        const voteWithParamEvents = await opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock)
+        const voteWithoutParamEvents = await retryApiCall(() => opGovernorProxyContract.queryFilter(voteFilter, fromBlock, toBlock))
+        const voteWithParamEvents = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(voteWithParamsFilter, fromBlock, toBlock))
         let voteEvents = voteWithoutParamEvents.concat(voteWithParamEvents)
         for(let voteEvent of voteEvents){
             var voteValue = (ethers.BigNumber.from(voteEvent.args.weight).toString());
@@ -386,7 +396,7 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
                 const addressFirstEight = addressStr.substring(0, 8);
                 const addressLastFour = addressStr.substring(addressStr.length - 4);
                 let formattedAddress = addressFirstEight + "..." + addressLastFour;
-                const ensName = await retryApiCall(() =>mainNetProvider.lookupAddress(addressStr))
+                const ensName = await retryApiCall(() => mainNetProvider.lookupAddress(addressStr))
                 if(ensName){
                     formattedAddress = ensName
                 }
@@ -416,13 +426,17 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
 
 }
 
+//Currently only looks for updated proposal deadlines but will eventually have logic for updates quorums and proposal types
 async function getProposalUpdates(castArray,  openProposals, newProposals, fromBlock, toBlock){
-    let currentBlock = await provider.getBlockWithTransactions('latest')
+    const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+    const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`)
+    const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${INFURA_API}`)
+    let currentBlock = await retryApiCall(() =>  provider.getBlockWithTransactions('latest'))
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
     const deadlineFilter = opGovernorProxyContract.filters.ProposalDeadlineUpdated()
     const quorumFilter = opGovernorProxyContract.filters.QuorumNumeratorUpdated()
-    const deadlineUpdateEvents = await opGovernorProxyContract.queryFilter(deadlineFilter,fromBlock, toBlock)
-    const quorumUpdateEvents = await opGovernorProxyContract.queryFilter(quorumFilter, fromBlock, toBlock)
+    const deadlineUpdateEvents = await retryApiCall(() =>  opGovernorProxyContract.queryFilter(deadlineFilter,fromBlock, toBlock))
+    const quorumUpdateEvents = await retryApiCall(() => opGovernorProxyContract.queryFilter(quorumFilter, fromBlock, toBlock))
     let proposalsToUpdate = []
     for(let deadlineUpdateEvent of deadlineUpdateEvents){
         
@@ -454,10 +468,14 @@ async function getProposalUpdates(castArray,  openProposals, newProposals, fromB
  }          
 
 
+ //This function isn't currently used anywhere but I created it just in case
 async function getVoteResults(proposalId){
+    const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
+    const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`)
+    const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${INFURA_API}`)
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
     const voteFilter = opGovernorProxyContract.filters.VoteCast(ProposalDeadlineUpdated)
-    let voteResult = await opGovernorProxyContract.proposalVotes(proposalId)
+    let voteResult = await retryApiCall(() => opGovernorProxyContract.proposalVotes(proposalId))
     voteResult.forEach(function(result){
         result = ethers.BigNumber.from(result).toString()
     })
@@ -471,7 +489,6 @@ async function getVoteResults(proposalId){
     voteResults.againstVotes = againstVotes
     voteResults.abstainVotes = abstainVotes
 }
-
 
 
 module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes, getVoteResults, findNewProposals, getProposalUpdates }
