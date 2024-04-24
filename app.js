@@ -1,6 +1,13 @@
-// Scan for other updates (expiration, quorum, proposaltype)
-// Look into incorporating ENS names
-// Look into additional neynar account and supercast account
+// NOW: Add logic for creating proposal object if one is not found
+// NOW: Look into making castsy more wordy and less numbery
+// EVENTUALLY: Add periodic vote results updating
+// Test against all known past contract events
+// Get keys into google cloud
+// Wrap everything in error handling
+// EVENTUALLY: logic forquorum, proposaltype, etc.
+
+
+
 
 
 const ethers = require('ethers');
@@ -8,7 +15,7 @@ const dotenv = require("dotenv").config();
 const { updateTimestamp, getLastTimestamp, getOpenProposals, updateProposalDatabases } = require('./database/database.js');
 const { retryApiCall, accessSecret } = require('./utils/apiutils.js');
 const { sendCasts } = require('./farcaster/farcaster.js');
-const { getExpiredProposals, getCanceledProposals, getNewVotes, findNewProposals } = require('./functions/gov-functions.js')
+const { getExpiredProposals, getCanceledProposals, getNewVotes, findNewProposals, getProposalUpdates } = require('./functions/gov-functions.js')
 
 
 async function main(startBlock){
@@ -56,12 +63,15 @@ async function main(startBlock){
     // openPrososals = JSON.parse(require ('./proposals.json')).toString()
     // console.log(openProposals)
     let newProposals = await findNewProposals(castsToSend, fromBlock, toBlock)
+    await getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum)
     if(openProposals || newProposals){
+        await getProposalUpdates(castsToSend,  openProposals, newProposals, fromBlock, toBlock)
         await getExpiredProposals(castsToSend, openProposals, closedProposals, toBlock)
         await getCanceledProposals(castsToSend, closedProposals, openProposals, newProposals, fromBlock, toBlock)
+      
         
     }
-    await getNewVotes(castsToSend, openProposals, newProposals, fromBlock, toBlock, voteMinimum)
+ 
     if ((newProposals && newProposals.length > 0) || (closedProposals && closedProposals.length > 0)) {
         await updateProposalDatabases(newProposals, closedProposals);
     }
@@ -91,20 +101,20 @@ async function runLoopFrom(blockNumber) {
     let currentBlock = await retryApiCall(() => provider.getBlockWithTransactions('latest'))
     // Ensure blockNumber is within the desired range
     if (blockNumber <= currentBlock.number) {
-        console.log("executing main from block :" + blockNumber)
+        console.log("executing main from block :" + (blockNumber + 50000))
         // Execute main function with the current block number
         main(blockNumber);
         
         // Increment blockNumber for the next iteration
-        blockNumber += 100000;
+        blockNumber += 50000;
         
         // Schedule the next iteration after a delay
         setTimeout(async () => {
             // Call runLoopFrom recursively with the updated blockNumber
             await runLoopFrom(blockNumber);
-        }, 60000); // Delay of 300 seconds (5 minutes)
+        }, 120000); 
     }
 }
 
 // Start the loop from the specified block number
-runLoopFrom(119032724);
+runLoopFrom(118599210);

@@ -1,14 +1,15 @@
 const dotenv = require("dotenv").config()
 const { ethers, JsonRpcProvider } = require('ethers');
-const { getOpenProposals } = require('../database/database.js');
+const crypto = require('crypto');
+const { retryApiCall, accessSecret } = require('../utils/apiutils.js');
+const { getOpenProposals, updateEndBlocks } = require('../database/database.js');
 const { searchMatch } = require('../utils/helpers.js')
 const opTokenAddress = '0x4200000000000000000000000000000000000042'
 const opGovernorProxyAddress = '0xcdf27f107725988f2261ce2256bdfcde8b382b10'
 const opGovernorReadyAsProxyABI = JSON.parse(require('../abi/opGovernorReadAsProxy.json').result)
 const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${process.env.INFURA_API}`)
+const mainNetProvider = new ethers.providers.JsonRpcProvider(`https://mainnet.infura.io/v3/${process.env.INFURA_API}`)
 const proposals = JSON.parse(require ('../data/proposals.json'))
-
-
 
 
 async function findNewProposals(castsToSend, fromBlock, toBlock){
@@ -96,7 +97,6 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 1
-            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
                   
            }  else{
@@ -147,7 +147,6 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 2
-            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
                   
            }  else{
@@ -196,7 +195,6 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 3
-            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
                   
            }  else{
@@ -246,7 +244,6 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
             newProposalObject.endBlock = endBlock
             newProposalObject.proposalType = proposalType
             newProposalObject.filter = 4
-            console.log("pushing " + newProposalObject)
             newProposals.push(newProposalObject)
         
                   
@@ -260,7 +257,8 @@ async function findNewProposals(castsToSend, fromBlock, toBlock){
             const firstSix = numberStr.substring(0, 6);
             const lastFour = numberStr.substring(numberStr.length - 4);
             const formattedId = firstSix + "..." + lastFour;
-            newCastObj.cast = `New proposal created- ${newProposal.header} (proposalId ${formattedId})\nhttps://optimistic.etherscan.io/tx/${newProposal.transactionHash})`
+            newCastObj.cast = `New proposal created- ${newProposal.header} (ID ${formattedId})`
+            newCastObj.hasUrl = true
             castsToSend.push(newCastObj)
         })
         return newProposals
@@ -301,7 +299,8 @@ async function getCanceledProposals(castArray, closedArray, openProposals, newPr
                 closedArray.push(openProposals[openIndex])
                 openProposals.splice(openIndex, 1);
             } 
-            castObj.cast = `Proposal Canceled- ${header}(ProposalId ${formattedId}): https://optimistic.etherscan.io/tx/${castObj.transactionHash})`
+            castObj.cast = `Proposal canceled- ${header}(ID ${formattedId})`
+            castObj.hasUrl = true
             castArray.push(castObj)
         }
     return
@@ -336,9 +335,12 @@ async function getExpiredProposals(castArray, openProposals, closedProposals, cu
            const lastFour = numberStr.substring(numberStr.length - 4);
            const formattedId = firstSix + "..." + lastFour;
            let castObject= {}
-           castObject.transactionHash = null
+        
            castObject.blockHeight = proposal.endBlock
-           castObject.cast = (`Voting ended for Proposal ${proposal.header} (ID ${formattedId})\n For: ${resultsObj.forVotes} OP\n Against: ${resultsObj.againstVotes} OP\n Abstain: ${resultsObj.abstainVotes} OP` )
+           castObject.cast = (`Voting ended for proposal ${proposal.header} (ID ${formattedId})\n For: ${resultsObj.forVotes} OP\n Against: ${resultsObj.againstVotes} OP\n Abstain: ${resultsObj.abstainVotes} OP` )
+           let jsonString = JSON.stringify(castObject);
+           castObject.transactionHash = crypto.createHash('sha256').update(jsonString).digest('hex');
+           castObject.hasUrl = false;
            castArray.push(castObject)
            proposal.results = resultsObj
            closedProposals.push(proposal)
@@ -380,9 +382,14 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
                 const propLastFour = voteObj.proposalId.substring(voteObj.proposalId.length - 4);
                 const formattedPropId = propFirstSix + "..." + propLastFour;
                 const addressStr = voteObj.voter
+              
                 const addressFirstEight = addressStr.substring(0, 8);
                 const addressLastFour = addressStr.substring(addressStr.length - 4);
-                const formattedAddress = addressFirstEight + "..." + addressLastFour;
+                let formattedAddress = addressFirstEight + "..." + addressLastFour;
+                const ensName = await retryApiCall(() =>mainNetProvider.lookupAddress(addressStr))
+                if(ensName){
+                    formattedAddress = ensName
+                }
                 let voteString = ''
                 if(voteObj.support === 0){
                     voteString = 'voted against'
@@ -392,11 +399,12 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
                     voteString = 'voted to abstain from'
                 }
                 if(voteArray){
-                    castObj.cast = `${formattedAddress} ${voteString} proposal ${voteArray[0].matchedObj.header} (proposalId ${formattedPropId}) with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
+                    castObj.cast = `${formattedAddress} ${voteString} proposal ${voteArray[0].matchedObj.header} (ID ${formattedPropId}) with ${formattedVoteValue} OP vote weight`
                     // console.log(castObj)
                 } else{
-                    castObj.cast = `${formattedAddress} ${voteString} proposal ${formattedPropId} with ${formattedVoteValue} OP vote weight: https://optimistic.etherscan.io/tx/${castObj.transactionHash}`
+                    castObj.cast = `${formattedAddress} ${voteString} proposal ${formattedPropId} with ${formattedVoteValue} OP vote weight`
                 }
+                castObj.hasUrl = true
                 castsToSend.push(castObj)
             }
         }
@@ -408,19 +416,47 @@ async function getNewVotes(castsToSend, openProposals, newProposals, fromBlock, 
 
 }
 
-// async function getProposalUpdates(){
-//     let currentBlock = await provider.getBlockWithTransactions('latest')
-//     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
-//     const filter = opGovernorProxyContract.filters.ProposalCanceled()
-//     const deadlineUpdateEvents = await opGovernorProxyContract.queryFilter(filter, currentBlock.number - 10000000, currentBlock.number)
-//     console.log(deadlineUpdateEvents)
-
-// }
-
+async function getProposalUpdates(castArray,  openProposals, newProposals, fromBlock, toBlock){
+    let currentBlock = await provider.getBlockWithTransactions('latest')
+    const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
+    const deadlineFilter = opGovernorProxyContract.filters.ProposalDeadlineUpdated()
+    const quorumFilter = opGovernorProxyContract.filters.QuorumNumeratorUpdated()
+    const deadlineUpdateEvents = await opGovernorProxyContract.queryFilter(deadlineFilter,fromBlock, toBlock)
+    const quorumUpdateEvents = await opGovernorProxyContract.queryFilter(quorumFilter, fromBlock, toBlock)
+    let proposalsToUpdate = []
+    for(let deadlineUpdateEvent of deadlineUpdateEvents){
+        
+            let deadlineUpdateObj = {}
+            let castObject = {}
+            deadlineUpdateObj.proposalId = ((BigInt(deadlineUpdateEvent.args[0]._hex, 16)).toString())
+            deadlineUpdateObj.newDeadline = Number(BigInt(deadlineUpdateEvent.args[1]._hex, 16));
+            let deadlineIdMatch = searchMatch(deadlineUpdateObj, openProposals, newProposals)
+            deadlineUpdateObj.endBlock = deadlineUpdateObj.newDeadline
+            if(deadlineIdMatch[0].source === 'openProposals'){
+                openProposals[deadlineIdMatch[0].index].endBlock =  deadlineUpdateObj.newDeadline 
+                proposalsToUpdate.push(deadlineUpdateObj)
+            }
+            if(deadlineIdMatch[0].source === 'newProposals'){
+            newProposals[deadlineIdMatch[0].index].endBlock = deadlineUpdateObj.newDeadline 
+            }
+                const propFirstSix = deadlineUpdateObj.proposalId.substring(0, 6);
+                const propLastFour = deadlineUpdateObj.proposalId.substring(deadlineUpdateObj.proposalId.length - 4);
+                const formattedPropId = propFirstSix + "..." + propLastFour;
+            castObject.blockHeight = deadlineUpdateEvent.blockNumber
+            castObject.transactionHash = deadlineUpdateEvent.transactionHash
+            castObject.cast = `Proposal deadline updated for ${deadlineIdMatch[0].matchedObj.header} (ID ${formattedPropId} \n Old deadline: block ${deadlineUpdateObj.oldDeadline}\n New deadline: ${deadlineUpdateObj.newDeadline}`
+            castObject.hasUrl = true
+            castArray.push(castObject)
+            // console.log("proposalId: " + proposalId)
+            // console.log("new deadline: " + newDeadline)
+        }
+        await updateEndBlocks(proposalsToUpdate)    
+ }          
 
 
 async function getVoteResults(proposalId){
     const opGovernorProxyContract = new ethers.Contract(opGovernorProxyAddress, opGovernorReadyAsProxyABI, provider);
+    const voteFilter = opGovernorProxyContract.filters.VoteCast(ProposalDeadlineUpdated)
     let voteResult = await opGovernorProxyContract.proposalVotes(proposalId)
     voteResult.forEach(function(result){
         result = ethers.BigNumber.from(result).toString()
@@ -438,5 +474,5 @@ async function getVoteResults(proposalId){
 
 
 
-module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes, getVoteResults, findNewProposals }
+module.exports = { getExpiredProposals, getCanceledProposals, getNewVotes, getVoteResults, findNewProposals, getProposalUpdates }
 

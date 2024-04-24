@@ -213,4 +213,42 @@ async function getOpenProposals() {
 }
 
 
-module.exports = { updateTimestamp, getLastTimestamp, pruneDatabaseAndEmail, getOpenProposals, updateProposalDatabases }
+
+async function updateEndBlocks(arrayOfObjects) {
+    try {
+        if (!client || !client.topology || !client.topology.isConnected()) {
+            const DB_URI = await retryApiCall(() => accessSecret('DB_URI'));
+            client = new MongoClient(DB_URI);
+            await retryApiCall(() => client.connect());
+            console.log("Connected to the database");
+      
+        }
+        const database = client.db('OP-Governance'); 
+        const collection = database.collection('Open Proposals');
+        for (const obj of arrayOfObjects) {
+            // Find the corresponding document in the MongoDB collection
+            const documentToUpdate = await collection.findOne({ proposalId: obj.proposalId });
+
+            if (documentToUpdate) {
+                // Update the 'endBlock' property of the document
+                documentToUpdate.endBlock = obj.endBlock;
+
+                // Save the updated document back to the database
+                await collection.updateOne(
+                    { _id: documentToUpdate._id },
+                    { $set: { endBlock: obj.endBlock } }
+                );
+
+                console.log(`Updated document with proposalId ${obj.proposalId}`);
+            } else {
+                console.log(`No document found with proposalId ${obj.proposalId}`);
+            }
+        } 
+    }catch(err){
+        console.log(err)
+    }
+}
+
+
+
+module.exports = { updateTimestamp, getLastTimestamp, pruneDatabaseAndEmail, getOpenProposals, updateProposalDatabases, updateEndBlocks }
