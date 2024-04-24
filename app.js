@@ -8,7 +8,7 @@ const { retryApiCall, accessSecret } = require('./utils/apiutils.js');
 const { sendCasts } = require('./farcaster/farcaster.js');
 const { getExpiredProposals, getCanceledProposals, getNewVotes, findNewProposals, getProposalUpdates } = require('./functions/gov-functions.js')
 
-exports.main = async function(){
+exports.main = async (req, res) =>{
     try{
     const INFURA_API = await retryApiCall(() => accessSecret('INFURA_API'));
     const provider = new ethers.providers.JsonRpcProvider(`https://optimism-mainnet.infura.io/v3/${INFURA_API}`);
@@ -63,13 +63,15 @@ exports.main = async function(){
     }
    
     await updateTimestamp(currentBlock.number, sentCastArray);
-    return
 }catch(err){
-        console.log("main function error: " + err)
+    console.log(err)
+    return
     }
-
-    return;
+    console.log("Cloud Function executed");
+    res.status(200).send("Cloud Function executed successfully");
+    return
 }
+
 
 // // Define a function to be executed by setTimeout for testing
 // async function runLoopFrom(blockNumber) {
