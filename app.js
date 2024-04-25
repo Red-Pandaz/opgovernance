@@ -19,7 +19,7 @@ exports.main = async (req, res) =>{
     let [lastBlock, lastTimestamp] = await getLastTimestamp()
     let fromBlock = lastBlock + 1;
     let toBlock = currentBlock.number;
-    let cronTime = 180000;
+    let cronTime = 1800000;
     let voteMinimum = 500000
     let castsToSend = [];
     let openProposals =[]
