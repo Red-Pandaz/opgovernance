@@ -23,6 +23,7 @@ async function updateTimestamp(blockHeight, castArray) {
         // Handle the error if needed
     }
     console.log("done updating timestamp")
+    return
 }
 
 async function pushOpSnapshot(snapshot) {
@@ -51,8 +52,10 @@ async function pushOpSnapshot(snapshot) {
             await retryApiCall(() => client.close());
 
             console.log("Connection closed");
+            return
     }
-}
+   return
+    }
 }
 
 //Adds new proposals to open collection, removed closed proposals from open collection and adds them to closed collection

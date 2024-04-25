@@ -1,3 +1,4 @@
+// EVENTUALLY: Add support for Snapshot veto period
 // EVENTUALLY: Add periodic vote results updating
 // EVENTUALLY: logic for quorum, proposaltype, etc.
 
@@ -63,13 +64,14 @@ exports.main = async (req, res) =>{
     }
    
     await updateTimestamp(currentBlock.number, sentCastArray);
+    console.log("Cloud Function executed");
+    res.status(200).send("Cloud Function executed successfully");
+    return
 }catch(err){
     console.log(err)
     return
     }
-    console.log("Cloud Function executed");
-    res.status(200).send("Cloud Function executed successfully");
-    return
+
 }
 
 

@@ -28,7 +28,7 @@ async function accessSecret(secretName) {
     const client = new SecretManagerServiceClient();
   
     try {
-      const name = client.secretVersionPath('foamcaster-2', secretName, 'latest'); // Replace with your project ID
+      const name = client.secretVersionPath('op-governance', secretName, 'latest');
       const [version] = await client.accessSecretVersion({ name });
       const payload = version.payload.data.toString('utf8');
       return payload;
